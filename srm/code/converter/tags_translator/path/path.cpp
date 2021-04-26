@@ -2,7 +2,7 @@
  * @file
  * @brief Path parsing class source file
  * @authors Chevykalov Grigory
- * @date 14.03.2021
+ * @date 19.04.2021
  *
  * Contains path parsing class realisation
  */
@@ -10,13 +10,14 @@
 #include <srm.h>
 
 #include <cctype>
+#include <sstream>
 
 /**
  * Constructor for path_t
  * @param[in] ps pointer to a list of primitives
  * @warning pointer mustn't be nullptr
  */
-srm::path_t::path_t(std::list<srm::primitive_t *> *ps) {
+srm::path_t::path_t(std::list<srm::primitive_t *> *ps, srm::transform_t transform) {
   if(ps == nullptr)
     throw std::exception("Incorrect pointer");
 
@@ -26,6 +27,7 @@ srm::path_t::path_t(std::list<srm::primitive_t *> *ps) {
   checkPoint = srm::vec_t(0, 0);
   lastCommand = '\0';
   state = srm::state_t::start;
+  transformCompos = transform;
 }
 
 /**
@@ -89,11 +91,25 @@ std::vector<double> srm::path_t::GetNums(const char **strPtr) noexcept {
  * Processes the moveto command with absolute coordinates as arguments ("M")
  * @param[in] nums vector of numeric command arguments
  */
-void srm::path_t::PathMAbs(const std::vector<double> &nums) noexcept {
+void srm::path_t::PathMAbs(const std::vector<double> &nums, const rapidxml::xml_node<>* tag) noexcept {
   // add the previous primitive to the list
   if (primitive != nullptr)
-    if (primitive->size() > 0)
+    if (primitive->size() > 0) {
+      transform_t transform;
+      auto attr = tag->first_attribute("transform");
+      while (attr) {
+        transform *= transform_t(attr->value());
+        attr = attr->next_attribute("transform");
+      }
+      if (tag->first_attribute("transform")) {
+        transform.Apply(primitive);
+      }
+      transformCompos.Apply(primitive);
+
+      primitive->fill = IsFill(tag);
+
       primitives->push_back(primitive);
+    }
     else
       delete primitive;
 
@@ -135,11 +151,25 @@ void srm::path_t::PathMAbs(const std::vector<double> &nums) noexcept {
  * Processes the moveto command with relative coordinates as arguments ("m")
  * @param[in] nums vector of numeric command arguments
  */
-void srm::path_t::PathMRel(const std::vector<double> &nums) noexcept {
+void srm::path_t::PathMRel(const std::vector<double> &nums, const rapidxml::xml_node<>* tag) noexcept {
   // add the previous primitive to the list
   if (primitive != nullptr)
-    if (primitive->size() > 0)
+    if (primitive->size() > 0) {
+      transform_t transform;
+      auto attr = tag->first_attribute("transform");
+      while (attr) {
+        transform *= transform_t(attr->value());
+        attr = attr->next_attribute("transform");
+      }
+      if (tag->first_attribute("transform")) {
+        transform.Apply(primitive);
+      }
+      transformCompos.Apply(primitive);
+
+      primitive->fill = IsFill(tag);
+
       primitives->push_back(primitive);
+    }
     else
       delete primitive;
 
@@ -791,10 +821,10 @@ void srm::path_t::ParsePath(const rapidxml::xml_node<> *tag) noexcept {
       nums = this->GetNums(&attr);
       switch (command) {
         case 'M':
-          this->PathMAbs(nums);
+          this->PathMAbs(nums, tag);
           break;
         case 'm':
-          this->PathMRel(nums);
+          this->PathMRel(nums, tag);
           break;
         case 'L':
           this->PathLAbs(nums);
@@ -869,9 +899,23 @@ void srm::path_t::ParsePath(const rapidxml::xml_node<> *tag) noexcept {
     }
   }
   // add the last primitive
-  if(primitive != nullptr)
-    if (primitive->size() > 0)
+  if (primitive != nullptr)
+    if (primitive->size() > 0) {
+      transform_t transform;
+      auto attr = tag->first_attribute("transform");
+      while (attr) {
+        transform *= transform_t(attr->value());
+        attr = attr->next_attribute("transform");
+      }
+      if (tag->first_attribute("transform")) {
+        transform.Apply(primitive);
+      }
+      transformCompos.Apply(primitive);
+
+      primitive->fill = IsFill(tag);
+
       primitives->push_back(primitive);
+    }
     else
       delete primitive;
 }

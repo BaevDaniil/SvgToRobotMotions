@@ -2,7 +2,7 @@
  * @file
  * @brief Translator class source file
  * @authors Vorotnikov Andrey, Pavlov Ilya, Chevykalov Grigory
- * @date 15.03.2021
+ * @date 18.04.2021
  *
  * Contains main converter class realisatiion
  */
@@ -39,8 +39,8 @@ void srm::translator_t::WriteLog(const std::string &str) noexcept {
 }
 
 /**
- * Set svg image to convert function function. Check file abd create tag tree
- * @param[in] svgFileName svg image file name
+ * Set svg image for converting. Check file and create tag tree.
+ * @param[in] svgFileName path to file with svg image
  */
 void srm::translator_t::SetSvg(const std::string &svgFileName) {
   std::ifstream fin(svgFileName);
@@ -78,7 +78,7 @@ static void _getTags(rapidxml::xml_node<> *node, std::list<srm::tag_t *> *tags, 
   while (node) {
     srm::tag_t *tag = new srm::tag_t(node);
     nodeName.assign(node->name());
-    if ((nodeName == "g" || nodeName == "svg") && node->last_attribute("transform")) {
+    if (nodeName == "g" || nodeName == "svg") {
       tag->level = lvl + 1;
       tags->push_back(tag);
       _getTags(node->first_node(), tags, lvl + 1);
@@ -105,6 +105,7 @@ void srm::translator_t::GenCode(const std::string &codeFileName) const {
   
   std::list<srm::primitive_t *> primitives;
   srm::TagsToPrimitives(tags, &primitives);
+  srm::SplitPrimitives(&primitives);
 
   for (auto tag : tags)
     delete tag;
@@ -118,11 +119,14 @@ void srm::translator_t::GenCode(const std::string &codeFileName) const {
 
   fout << ".PROGRAM " << roboConf.GetProgramName()  << "()" << std::endl;
   fout << "\tHERE .#start" << std::endl;
-  fout << "\tSPEED " << roboConf.GetRobotSpeed() << " MM/S ALWAYS" << std::endl;
+  fout << "\tSPEED " << roboConf.GetVelocity() << " MM/S ALWAYS" << std::endl;
   fout << "\tACCURACY " << roboConf.GetRoboAcc() << std::endl;
 
-  for (auto primitive : primitives)
+  for (auto primitive : primitives) {
     fout << *primitive << ";\n";
+    if (primitive->fill)
+      FillPrimitive(fout, *primitive);
+  }
 
   fout << "\tJMOVE .#start" << std::endl;
   fout << ".END";
